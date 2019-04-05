@@ -105,7 +105,7 @@ def cameraLoop(cam, signals):
     
         if ret != True:
             #signals['stop'] = True
-            debug_print('Camera loop skipped a frame')
+            debug_print('Camera loop skipped a frame.')
             time.sleep(1)
             continue
         
@@ -150,7 +150,7 @@ def findRedObject(S, sgn, signals, maxTime = 3 * 60):
     """ Searching for red object in horizontal direction '+' or '-' 
     Maximum duration of this function is maxTime seconds """
     
-    debug_print('Finding red in direction ' + ('+' if sgn == 1 else '-'))
+    debug_print('Finding red in direction ' + ('+' if sgn == 1 else '-') + '.')
     signals['red'] = False
 
     start = time.time()
@@ -163,18 +163,18 @@ def findRedObject(S, sgn, signals, maxTime = 3 * 60):
         now = time.time()
 
     if now - start >= maxTime:
-        debug_print('Maximum time for finding red expired. Aborting operation...')
+        debug_print('Maximum time for finding red expired. Aborting operation.')
         signals['stop'] = True
         
     if any([signals['stop'], signals['red'], signals['metal']]):
         S.Move(0, 'S')
             
-    debug_print('Finding red done')
+    debug_print('Finding red done.')
         
 def findGreenObject(S, signals):
     """ Searching for green object in vertical direction '-' """
 
-    debug_print('Finding green in direction ' + ('+' if sgn == 1 else '-'))
+    debug_print('Finding green in direction ' + ('+' if sgn == 1 else '-') + '.')
     signals['green'] = False
     # Maximum duration of this function is maxTime seconds
     maxTime = 2 * 60
@@ -188,13 +188,13 @@ def findGreenObject(S, signals):
         now = time.time()
 
     if now - start >= maxTime:
-        debug_print('Maximum time for finding green expired. Aborting operation...')
+        debug_print('Maximum time for finding green expired. Aborting operation.')
         signals['stop'] = True
         
     if any([signals['stop'], signals['green'], signals['metal']]):
         S.Move(1, 'S')
             
-    debug_print('Finding green done')
+    debug_print('Finding green done.')
         
 def takePicture(cam, signals):
     """ Takes a picture with the camera cam and stores it with the given filename """
@@ -214,9 +214,9 @@ def takePicture(cam, signals):
     if ret:
         cv2.imwrite(signals['path'] + 'img' + str(signals['pltCnt']) + '_' + str(signals['imgCnt']) + '.png', frame)
         signals['imgCnt'] += 1
-        debug_print('Slika je spremljena')
+        debug_print('The picture is saved.')
     else:
-        debug_print('Nije bilo moguće napraviti sliku')
+        debug_print('It was not possible to take a picture.')
 
 def takeThreePictures(C, camera, signals, sgn):
     """ Takes three pictures of the target: one from the front side and one from each flank """
@@ -237,12 +237,12 @@ def takeThreePictures(C, camera, signals, sgn):
         now = time.time()
         
     if signals['stop']:
-        debug_print('Operation aborted due to stop signal')
+        debug_print('Operation aborted due to stop signal.')
         C.Move(0, 'S')
         return
     elif signals['metal']:
         C.Move(0, 'S')
-        debug_print('Metal encountered and skipped first side picture. Returning to the center...')
+        debug_print('Metal encountered and skipped first side picture. Returning to the center.')
         # Try to take the picture from the other angle, first go back to the center
         C.Move(0, 'M', sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
     else:
@@ -253,7 +253,7 @@ def takeThreePictures(C, camera, signals, sgn):
         # Head back to the center
         C.Move(0, 'M', sgn  * pathHalfLength, wait = True)
 
-    debug_print('We are in the center again. Moving to the other side...')
+    debug_print('We are in the center again. Moving to the other side.')
     resetSignals(signals)
     maxTime = C.Move(0, 'M', sgn  * pathHalfLength) + 5
     start = time.time()
@@ -264,14 +264,14 @@ def takeThreePictures(C, camera, signals, sgn):
         now = time.time()
 
     if signals['stop']:
-        debug_print('Operation aborted due to stop signal')
+        debug_print('Operation aborted due to stop signal.')
         C.Move(0, 'S')
         return
     elif signals['metal']:
         C.Move(0, 'S')
-        debug_print('Metal encountered. Returning to the center...')
+        debug_print('Metal encountered. Returning to the center.')
         # Return to the center
-        debug_print('Metal encountered and skipped second side picture. Returning to the center...')
+        debug_print('Metal encountered and skipped second side picture. Returning to the center.')
         C.Move(0, 'M', -1 * sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
     else:
         C.Move(2, 'M', -angleRotation, wait = True)
@@ -283,7 +283,7 @@ def takeThreePictures(C, camera, signals, sgn):
     resetSignals(signals)
     signals['pltCnt'] += 1
     signals['imgCnt'] = 1
-    debug_print('Take three pictures procedure finished')
+    debug_print('Take three pictures procedure finished.')
 
 def resetSignals(signals):
     targets = ['green', 'red', 'blue', 'stop', 'metal']
@@ -293,7 +293,7 @@ def resetSignals(signals):
 def plantIter(C, camera, direction, signals):
     """ One iteration of plant imaging """
     
-    debug_print('Starting iteration in direction ' + direction)
+    debug_print('Starting iteration in direction ' + direction + '.')
     time.sleep(2)
     resetSignals(signals)
     
@@ -366,7 +366,7 @@ def metalCheck(C, signals):
         
         time.sleep(0.25)
         
-    debug_print('Metal check loop is done')
+    debug_print('Metal check loop is done.')
         
 def calibrateCamera(C, signals):
     """Searching the blue wire for camera calibration """
