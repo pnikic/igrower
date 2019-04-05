@@ -26,44 +26,6 @@ def extractColor(image, color):
     output = cv2.bitwise_and(image, image, mask = mask)
     return output
     
-def middleVertical(image, stride):
-    """ Returns the number of nonzero elements
-        in the middle vertical image strip of half-legth stride """
-    
-    rows, cols, channels = image.shape;
-    center = cols // 2
-    
-    # Vertical image strip subimage
-    ret = image[:, (center - stride) : (center + stride)]
-    # (1 / 3) because count_nonzero counts pixels in all 3 channels
-    nnz = (1 / 3) * np.count_nonzero(ret) / (rows * 2 * stride)
-      
-    # Draw middle vertical strip on original image
-    cv2.rectangle(image, (center - stride, 0), (center + stride, rows), (150,150,30))
-    # Draw the percentage of nonzero pixels in bottom-left corner
-    cv2.putText(image, '(V) Mask: %.2f %%' % (100 * nnz), (15, rows - 15), 1, 1, (255, 255, 255))
-    
-    return nnz
-
-def lowerHorizontal(image, stride):
-    """ Returns the number of nonzero elements
-        in the middle horizontal image strip of half-legth stride """
-    
-    rows, cols, channels = image.shape;
-    center = 9 * (rows // 10)
-    
-    # Horizontal image strip subimage
-    ret = image[(center - stride) : (center + stride), :]
-    # (1 / 3) because count_nonzero counts pixels in all 3 channels
-    nnz = (1 / 3) * np.count_nonzero(ret) / (cols * 2 * stride)
-      
-    # Draw middle vertical strip on original image
-    cv2.rectangle(image, (0, center - stride), (cols, center + stride), (150,150,30))
-    # Draw the percentage of nonzero pixels in bottom-left corner
-    cv2.putText(image, '(H) Mask: %.2f %%' % (100 * nnz), (15, rows - 45), 1, 1, (255, 255, 255))
-    
-    return nnz 
-
 def middleSquare(image, strideH, strideV, centerH, centerV):
     """ Returns the number of nonzero elements of the image
         in the middle square (sides: 2 * strideH, 2 * strideV)
@@ -72,6 +34,9 @@ def middleSquare(image, strideH, strideV, centerH, centerV):
     rows, cols, channels = image.shape;
     centerV = round(rows * centerV)
     centerH = round(cols * centerH)
+
+    strideV = min([rows - centerV, centerV, strideV])
+    strideH = min([cols - centerH, centerH, strideH])
     
     # Subimage
     ret = image[(centerV - strideV) : (centerV + strideV), (centerH - strideH) : (centerH + strideH)]
@@ -79,9 +44,9 @@ def middleSquare(image, strideH, strideV, centerH, centerV):
     nnz = (1 / 3) * np.count_nonzero(ret) / (4 * strideV * strideH)
       
     # Draw the rectangle on original image
-    cv2.rectangle(image, (centerH - strideH, centerV - strideV), (centerH + strideH, centerV + strideV), (150,150,30))
+    cv2.rectangle(image, (centerH - strideH, centerV - strideV), (centerH + strideH - 1, centerV + strideV - 1), (150,150,30))
     # Draw the percentage of nonzero pixels in bottom-left corner
-    cv2.putText(image, '(S) Mask: %.2f %%' % (100 * nnz), (15, rows - 15), 1, 1, (255, 255, 255))
+    cv2.putText(image, 'Mask: %.2f %%' % (100 * nnz), (15, rows - 15), 1, 1, (255, 255, 255))
     
     return nnz 
 
@@ -114,7 +79,7 @@ def cameraLoop(cam, signals):
         
         # Capturing red color
         redMask = extractColor(frame, red)
-        cntRed = middleVertical(redMask, 15)
+        cntRed = middleSquare(redMask, 15, 100000, 0.5, 0.5)
         
         if cntRed > .01:
             signals['red'] = True
