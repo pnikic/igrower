@@ -304,54 +304,54 @@ def plantIter(C, camera, direction, signals):
         T_red.start()
         T_red.join()
         if signals['metal']:
-            debug_print('Metal button was pressed. Iteration finished.')
+            debug_print('Metal signal during first red search. Iteration finished.')
             C.Move(0, 'M', -1 * sgn * 5, wait = True)
             resetSignals(signals)
             return
         if signals['stop']:
-            debug_print('Operation aborted due to stop signal')
+            debug_print('Operation aborted due to stop signal during first red search.')
             return
     
         T_green = threading.Thread(target = findGreenObject, args = (C, signals,))
         T_green.start()
         T_green.join()
         if signals['metal']:
-            debug_print('Metal button was pressed. Returning to vertical home position.')
+            debug_print('Metal signal during green search. Returning to vertical home position.')
             C.Move(1, 'H', wait = True)
             C.Move(0, 'M', sgn * 5, wait = True)
             resetSignals(signals)
             continue
         if signals['stop']:
-            debug_print('Operation aborted due to stop signal')
+            debug_print('Operation aborted due to stop signal during green search.')
             return
 
         C.Move(1, 'M', 4, wait = True)
         # Searching for red again, as the plant is perhaps not centered now
+        centerPos = C.AskPosition(0)
         T_red = threading.Thread(target = findRedObject, args = (C, -1 * sgn, signals, 20))
         T_red.start()
         T_red.join()
         if signals['metal']:
-            debug_print('Metal found during second red search')
-            return
+            debug_print('Metal signal during second red search. Returning to latest best position.')
+            C.Move(0, 'M', sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
         if signals['stop']:
-            debug_print('Operation aborted due to stop signal')
-            return
+            debug_print('Stop signal during second red search. Returning to latest best position.')
+            C.Move(0, 'M', sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
+
+        resetSignals(signals)
         
         # Go down before taking the pictures
-        C.Move(1, 'M', -9, wait = True)
-        if signals['stop']:
-            break
-            
+        C.Move(1, 'M', -9, wait = True)            
         takeThreePictures(C, camera, signals, sgn)
         if signals['stop']:
             return
             
-        debug_print('Moving up over the plants...')
+        debug_print('Moving up over the plants.')
         C.Move(1, 'M', 70, wait = True)
         if signals['stop']:
-            break
+            return
             
-        debug_print('Moving away from the plant and red wire...')
+        debug_print('Moving away from the plant and red wire.')
         C.Move(0, 'M', sgn * 5, wait = True)
         resetSignals(signals)
 
@@ -402,9 +402,22 @@ def calibrateCamera(C, signals):
             C.CameraSpeed(1)
             return
 
-    debug_print('Calibrating unsuccessful. Aborting operation...')
+    debug_print('Calibrating unsuccessful. Aborting operation.')
     signals['stop'] = True
 
+def stopRoutine(C, signals):
+    """ A routine to be called upon finishing.
+    Return all motors to their home positions and turns off the lights. """
+    
+    debug_print('Stop routine called.')
+    for i in range(4):
+        debug_print('Returning motor ' + str(i) + ' to home position.')
+        C.Move(i, 'H', wait = True)
+    
+        
+    C.Lights(0)
+    signals['stop'] = True
+    
 ############################ Main program ############################
 def run():
     signals = { 'green'  : False,
@@ -449,27 +462,34 @@ def run():
     C.Move(3, 'M', 250, wait = True)
     
     C.Lights(1)
+    # Camera calibration
     C.Move(2, 'M', 180, wait = True)
     calibrateCamera(C, signals)
     if signals['stop']:
+        stopRoutine(C, signals)
         return
     
     C.Move(2, 'M', 105, wait = True)
-    debug_print('Camera calibrated successfully')
+    debug_print('Camera calibrated successfully.')
 
+    # First iteration of plant imaging
     plantIter(C, cam, '-', signals)
     if signals['stop']:
+        stopRoutine(C, signals)
         return
 
-    debug_print('Preparing plant imaging on the other side')
+    # Second iteration of plant imaging
+    debug_print('Preparing plant imaging on the other side.')
     C.Move(2, 'M', -180, wait = True)
     plantIter(C, cam, '+', signals)
     if signals['stop']:
+        stopRoutine(C, signals)
         return
 
-    debug_print('Vertical motor returning to home position')
+    # Finishing routine
+    debug_print('Vertical motor returning to home position.')
     C.Move(1, 'H', wait = True)
-    print('Job done:', (time.time() - start), 'secs', flush=True)
+    print('Job done:', (time.time() - start), 'secs', flush = True)
 
     signals['stop'] = True
     T_cam.join()
