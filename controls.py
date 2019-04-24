@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import serial
 import time
+import datetime
 
 DEBUG_OUTPUT = 1
+
 def debug_print(msg):
     if DEBUG_OUTPUT:
         print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush=True)

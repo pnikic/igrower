@@ -12,9 +12,9 @@ import runSystem
 # Global variables
 s1 = '5:00:00' # start date
 
-sun = open('sunrises_copy.txt', 'r')
-sunrises = [x.split()[1] for x in sun.readlines()]
-sun.close()
+#sun = open('sunrises_copy.txt', 'r')
+#sunrises = [x.split()[1] for x in sun.readlines()]
+#sun.close()
 # End
 
 def timedelta2seconds(td):
@@ -45,7 +45,7 @@ def sunrise_job():
     print("It's sunrise. Work started...", datetime.datetime.now(), flush=True)
     runSystem.run()
 
-temp_job_times = ['4:00', '20:28']
+temp_job_times = ['06:00']
 
 def temp_job():
     print("Job started...", datetime.datetime.now(), flush=True)
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     while flag:
         try:
             schedule.run_pending()
-            time.sleep(1)
+            time.sleep(60)
         except Exception as e:
             print(str(e), flush=True)
             print("Jobs shut down...(%s)" % datetime.datetime.now(), flush=True)
