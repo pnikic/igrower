@@ -1,7 +1,7 @@
 #######################################
 # USAGE:
-# cd /Path/to/this/file
-# python scheduleJobs.py > output.txt
+# cd iGrower/igrower/
+# python3 scheduleJobs.py > /home/pi/Filakov/output.txt &
 #######################################
 
 import schedule

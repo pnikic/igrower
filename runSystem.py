@@ -10,9 +10,10 @@ import time
 import subprocess
 
 DEBUG_OUTPUT = 1
+output_file = None
 def debug_print(msg):
     if DEBUG_OUTPUT:
-        print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush=True)
+        print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush = True, file = output_file)
 
 def extractColor(image, color):
     """ Extracts the given BGR color from image
@@ -283,8 +284,11 @@ def plantIter(C, camera, direction, signals):
         if signals['metal']:
             debug_print('Metal signal during green search. Returning to vertical home position.')
             C.Move(1, 'H', wait = True)
-            safeMove(C, 0, 'M', sgn * 15, signals)
+            ret = safeMove(C, 0, 'M', sgn * 15, signals)
             resetSignals(signals)
+            if ret == False:
+                return
+            
             continue
         if signals['stop']:
             debug_print('Operation aborted due to stop signal during green search.')
@@ -317,15 +321,22 @@ def plantIter(C, camera, direction, signals):
             return
             
         debug_print('Moving away from the plant and red wire.')
-        safeMove(C, 0, 'M', sgn * 15, signals)
+        ret = safeMove(C, 0, 'M', sgn * 15, signals)
         resetSignals(signals)
+        if ret == False:
+            return
 
 def safeMove(C, motor, command, step, signals):
+    """ Executes a motor command while monitoring the metal sensors.
+    If metal is detected on the way, aborts the command and returns the motor back 5 cm's.
+    Returns whether the command was successfull or not."""
+    
     debug_print('Doing safe move for motor ' + str(motor) + ' (Command: ' + command + ', Step: ' + str(step)  + ').')
     # Clearing potential old metal signals
     signals['metal'] = False
     time.sleep(1)
-
+    
+    success = True
     start = time.time()
     now = time.time()
 
@@ -339,12 +350,14 @@ def safeMove(C, motor, command, step, signals):
         debug_print('Metal detected during safe move.')
         C.Move(motor, 'S')
         time.sleep(1)
+        success = False
 
         sgn = step / abs(step)
         C.Move(motor, 'M', -1 * sgn * 5, wait = True)
         signals['metal'] = False
 
     debug_print('Safe move done.')
+    return success
 
 def metalCheck(C, signals):
     """Checking the metal sensor pin """
@@ -406,7 +419,6 @@ def stopRoutine(C, signals):
         homePos = C.AskPosition(i)
         safeMove(C, i, 'M', -1 * homePos, signals)
         homePos = C.AskPosition(i)
-        debug_print('Motor ' + str(i) + ' in position ' + str(homePos) + '.')
         
     C.Lights(0)
     
@@ -430,26 +442,32 @@ def run():
     
     start = time.time()
     
-    C = Controls("/dev/ttyACM0")
-    if not C.started:
-        debug_print("Controls of the motors are not started. Aborting program...")
-        return
-    
-    cam = cv2.VideoCapture(0)
-    time.sleep(1)
-    if not cam.isOpened():
-        debug_print("Camera is not opened. Aborting program...")
-        return
-    
     # Make directory for the pictures
     directory = datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
-    signals['path'] += directory + '/' 
+    signals['path'] += directory + '/'
     try:
         os.makedirs(signals['path'])
     except Exception as e:
         debug_print(str(e))
         debug_print('Folder for pictures was not created. Aborting program...')
         return
+    
+    global output_file
+    output_file = open(signals['path'] + 'log.txt', 'w')
+    
+    C = Controls("/dev/ttyACM0")
+    if not C.started:
+        debug_print("Controls of the motors are not started. Aborting program...")
+        output_file.close()
+        return
+    
+    cam = cv2.VideoCapture(0)
+    time.sleep(1)
+    if not cam.isOpened():
+        debug_print("Camera is not opened. Aborting program...")
+        output_file.close()
+        return
+
     
     # Run the process
     T_metal = threading.Thread(target = metalCheck, args = (C, signals, ))
@@ -476,6 +494,7 @@ def run():
     if signals['stop']:
         stopRoutine(C, signals)
         signals['finish'] = True
+        output_file.close()
         return
 
     # Second iteration of plant imaging
@@ -485,12 +504,13 @@ def run():
     if signals['stop']:
         stopRoutine(C, signals)
         signals['finish'] = True
+        output_file.close()
         return
 
     # Finishing routine
     debug_print('Vertical motor returning to home position.')
     C.Move(1, 'H', wait = True)
-    print('Job done:', (time.time() - start), 'secs', flush = True)
+    debug_print('Job done: ' + str(time.time() - start) + ' secs')
 
     signals['finish'] = True
     T_cam.join()
@@ -501,6 +521,7 @@ def run():
     C.Close()
     
     uploadCloudFolder(signals['path'])
+    output_file.close()
 
 ############################ End #####################################
 
@@ -519,15 +540,14 @@ def temp_run():
 
     C = Controls("/dev/ttyACM0")
     if not C.started:
-        print("Controls of the motors are not started. Aborting program...", flush=True)
+        debug_print("Controls of the motors are not started. Aborting program...")
         return
     
-    C.Lights(1)
     time.sleep(3)
     cam = cv2.VideoCapture(0)
     time.sleep(1)
     if not cam.isOpened():
-        print("Camera is not opened. Aborting program...", flush=True)
+        debug_print("Camera is not opened. Aborting program...")
         return
     
        
@@ -539,7 +559,7 @@ def temp_run():
 #        return
 #
 
-    #C.Move(0, 'M', 0, wait = True)
+    C.Move(2, 'M', -90, wait = True)
 
     while True:
         time.sleep(.5)
@@ -551,14 +571,9 @@ def temp_run():
     C.Lights(0)
     C.Close()
     
-    #print('Camera is being released')
-    #cam.release()
-    #print('Camera is being released')
-    #cam.release()
-    
 ############################ End #####################################
 
 if __name__ == "__main__":
     run()
-    #temp_run()
+#    temp_run()
     
