@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from controls import Controls
 
 # Rucno pokretanje motora

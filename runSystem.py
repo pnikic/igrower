@@ -288,7 +288,7 @@ def plantIter(C, camera, direction, signals):
             resetSignals(signals)
             if ret == False:
                 return
-            
+
             continue
         if signals['stop']:
             debug_print('Operation aborted due to stop signal during green search.')
@@ -330,12 +330,12 @@ def safeMove(C, motor, command, step, signals):
     """ Executes a motor command while monitoring the metal sensors.
     If metal is detected on the way, aborts the command and returns the motor back 5 cm's.
     Returns whether the command was successfull or not."""
-    
+
     debug_print('Doing safe move for motor ' + str(motor) + ' (Command: ' + command + ', Step: ' + str(step)  + ').')
     # Clearing potential old metal signals
     signals['metal'] = False
     time.sleep(1)
-    
+
     success = True
     start = time.time()
     now = time.time()
@@ -451,11 +451,11 @@ def run():
         debug_print(str(e))
         debug_print('Folder for pictures was not created. Aborting program...')
         return
-    
+
     global output_file
-    output_file = open(signals['path'] + 'log.txt', 'w')
-    
-    C = Controls("/dev/ttyACM0")
+    output_file = open(signals['path'] + 'log.txt', 'w', encoding='utf-8')
+
+    C = Controls("/dev/ttyACM0", output_file)
     if not C.started:
         debug_print("Controls of the motors are not started. Aborting program...")
         output_file.close()
@@ -494,6 +494,8 @@ def run():
     if signals['stop']:
         stopRoutine(C, signals)
         signals['finish'] = True
+        T_cam.join()
+        T_metal.join()
         output_file.close()
         return
 
@@ -504,6 +506,8 @@ def run():
     if signals['stop']:
         stopRoutine(C, signals)
         signals['finish'] = True
+        T_cam.join()
+        T_metal.join()
         output_file.close()
         return
 

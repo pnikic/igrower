@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
+
 import serial
 import time
 import datetime
 
 DEBUG_OUTPUT = 1
+output_file = None
 
 def debug_print(msg):
     if DEBUG_OUTPUT:
-        print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush=True)
+        print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush = True, file = output_file)
 
 class Controls:
-    def __init__(self, port):
+    def __init__(self, port, out_file = None):
         """ Opening the serial port """
         self.started = False
         try:
@@ -32,6 +34,10 @@ class Controls:
         
         # Current position of the motor from the last query
         self.lastReadHome = ""
+
+        # Debug output file
+        global output_file
+        output_file = out_file
              
     def ReadValues(self):
         """ Reads all the values sent through Serial and returns
