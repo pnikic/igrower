@@ -11,14 +11,6 @@ import time
 import datetime
 import runSystem
 
-# Global variables
-s1 = '5:00:00' # start date
-
-#sun = open('sunrises_copy.txt', 'r')
-#sunrises = [x.split()[1] for x in sun.readlines()]
-#sun.close()
-# End
-
 def timedelta2seconds(td):
     """ Converts a datetime.timedelta object in format %H:%M:%S to seconds
     """
@@ -36,7 +28,11 @@ def sunrise_job():
     """ Function called at a fixed time in the morning.
     Waits until today's sunrise and runs the system afterwards.    
     """
-    global sunrises, s1
+
+    s1 = '5:00:00'
+    sun = open('/home/pi/iGrower/igrower/sunrise_times.txt', 'r')
+    sunrises = [x.split()[1] for x in sun.readlines()]
+    sun.close()
     s2 = sunrises[todayDecimal()]
     
     FMT = '%H:%M:%S'
@@ -44,30 +40,31 @@ def sunrise_job():
     td = datetime.datetime.strptime(s2, FMT) - datetime.datetime.strptime(s1, FMT)
     secs = timedelta2seconds(td)
     time.sleep(secs)
+
     print("It's sunrise. Work started...", datetime.datetime.now(), flush=True)
     runSystem.run()
-
-temp_job_times = ['06:00']
+    print("Job ended...", datetime.datetime.now(), flush=True)
 
 def temp_job():
     print("Job started...", datetime.datetime.now(), flush=True)
     runSystem.run()
     print("Job ended...", datetime.datetime.now(), flush=True)
 
+if __name__ == "__main__":
+    sunrise_job()
+
 ################################ MAIN PROGRAM ################################
-if __name__ == "__main__": 
-    print("Getting ready to start jobs... (%s)" % datetime.datetime.now(), flush=True)
-    #schedule.every().day.at(s1[:-3:]).do(sunrise_job)
-    for temp_time in temp_job_times:
-        schedule.every().day.at(temp_time).do(temp_job)
-    
-    flag = True
-    while flag:
-        try:
-            schedule.run_pending()
-            time.sleep(60)
-        except Exception as e:
-            print(str(e), flush=True)
-            print("Jobs shut down...(%s)" % datetime.datetime.now(), flush=True)
-            flag = False
+#if __name__ == "__main__":
+#    print("Getting ready to start jobs... (%s)" % datetime.datetime.now(), flush=True)
+#    schedule.every().day.at('06:00').do(temp_job)
+#
+#    flag = True
+#    while flag:
+#        try:
+#            schedule.run_pending()
+#            time.sleep(60)
+#        except Exception as e:
+#            print(str(e), flush=True)
+#            print("Jobs shut down...(%s)" % datetime.datetime.now(), flush=True)
+#            flag = False
 ##############################################################################
