@@ -424,7 +424,7 @@ def stopRoutine(C, signals):
     
 def uploadCloudFolder(folder):
     debug_print('Uploading to cloud folder started.')
-    subprocess.call(['/home/pi/Dropbox-Uploader/dropbox_uploader.sh -q upload ' + folder + ' .'], shell = True)
+    subprocess.call(['/home/pi/Dropbox-Uploader/dropbox_uploader.sh upload ' + folder + ' .'], shell = True)
     debug_print('Uploading to cloud folder completed.')
 
 ############################ Main program ############################
@@ -554,16 +554,18 @@ def temp_run():
         debug_print("Camera is not opened. Aborting program...")
         return
     
-       
+    T_metal = threading.Thread(target = metalCheck, args = (C, temp_signals, ))
     T_cam = threading.Thread(target = cameraLoop, args = (cam, temp_signals, ))
+    T_metal.start()
     T_cam.start()
 
 #    calibrateCamera(C, temp_signals)
 #    if temp_signals['stop']:
 #        return
 #
+#    C.Lights(1)
 
-    C.Move(2, 'M', -90, wait = True)
+    safeMove(C, 2, 'M', -90, temp_signals)
 
     while True:
         time.sleep(.5)
@@ -572,7 +574,8 @@ def temp_run():
             break
 
     T_cam.join()
-    C.Lights(0)
+    T_metal.join()
+#    C.Lights(0)
     C.Close()
     
 ############################ End #####################################

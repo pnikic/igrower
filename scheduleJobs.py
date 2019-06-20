@@ -2,8 +2,7 @@
 
 #######################################
 # USAGE:
-# cd iGrower/igrower/
-# python3 scheduleJobs.py > /home/pi/Filakov/output.txt &
+# nohup python3 /home/pi/iGrower/igrower/scheduleJobs.py > /home/pi/Filakov/output.txt &
 #######################################
 
 import schedule
@@ -45,26 +44,18 @@ def sunrise_job():
     runSystem.run()
     print("Job ended...", datetime.datetime.now(), flush=True)
 
-def temp_job():
-    print("Job started...", datetime.datetime.now(), flush=True)
-    runSystem.run()
-    print("Job ended...", datetime.datetime.now(), flush=True)
-
-if __name__ == "__main__":
-    sunrise_job()
-
 ################################ MAIN PROGRAM ################################
-#if __name__ == "__main__":
-#    print("Getting ready to start jobs... (%s)" % datetime.datetime.now(), flush=True)
-#    schedule.every().day.at('06:00').do(temp_job)
-#
-#    flag = True
-#    while flag:
-#        try:
-#            schedule.run_pending()
-#            time.sleep(60)
-#        except Exception as e:
-#            print(str(e), flush=True)
-#            print("Jobs shut down...(%s)" % datetime.datetime.now(), flush=True)
-#            flag = False
+if __name__ == "__main__":
+    print("Getting ready to start jobs... (%s)" % datetime.datetime.now(), flush=True)
+    schedule.every().day.at('05:00').do(sunrise_job)
+
+    flag = True
+    while flag:
+        try:
+            schedule.run_pending()
+            time.sleep(60)
+        except Exception as e:
+            print(str(e), flush=True)
+            print("Jobs shut down...(%s)" % datetime.datetime.now(), flush=True)
+            flag = False
 ##############################################################################
