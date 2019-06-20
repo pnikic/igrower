@@ -7,12 +7,13 @@ import numpy as np
 import os
 import threading
 import time
-import datetime
+import subprocess
 
 DEBUG_OUTPUT = 1
+output_file = None
 def debug_print(msg):
     if DEBUG_OUTPUT:
-        print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush=True)
+        print('(' + str(datetime.datetime.now())[:-7:]+ ')', msg, flush = True, file = output_file)
 
 def extractColor(image, color):
     """ Extracts the given BGR color from image
@@ -25,7 +26,7 @@ def extractColor(image, color):
     mask = cv2.inRange(image, lower, upper)
     output = cv2.bitwise_and(image, image, mask = mask)
     return output
-    
+
 def middleSquare(image, strideH, strideV, centerH, centerV):
     """ Returns the number of nonzero elements of the image
         in the middle square (sides: 2 * strideH, 2 * strideV)
@@ -64,7 +65,7 @@ def cameraLoop(cam, signals):
     # https://www.ginifab.com/feeds/pms/pms_color_in_image.php
     
     # Read until video is completed
-    while(not signals['stop'] and cam.isOpened()):
+    while(not signals['finish'] and cam.isOpened()):
         # Capture frame-by-frame
         ret, frame = cam.read()
     
@@ -111,7 +112,7 @@ def cameraLoop(cam, signals):
     cam.release()               # When the loop is done, release the video capture object
     cv2.destroyAllWindows()     # Close all the frames
     
-def findRedObject(S, sgn, signals, maxTime = 3 * 60):
+def findRedObject(S, sgn, signals, maxTime = 10 * 60):
     """ Searching for red object in horizontal direction '+' or '-' 
     Maximum duration of this function is maxTime seconds """
     
@@ -129,9 +130,9 @@ def findRedObject(S, sgn, signals, maxTime = 3 * 60):
 
     if now - start >= maxTime:
         debug_print('Maximum time for finding red expired. Aborting operation.')
-        signals['stop'] = True
+        signals['maxTime'] = True
         
-    if any([signals['stop'], signals['red'], signals['metal']]):
+    if any([signals['stop'], signals['red'], signals['metal'], signals['maxTime']]):
         S.Move(0, 'S')
             
     debug_print('Finding red done.')
@@ -139,10 +140,10 @@ def findRedObject(S, sgn, signals, maxTime = 3 * 60):
 def findGreenObject(S, signals):
     """ Searching for green object in vertical direction '-' """
 
-    debug_print('Finding green in direction ' + ('+' if sgn == 1 else '-') + '.')
+    debug_print('Finding green.')
     signals['green'] = False
     # Maximum duration of this function is maxTime seconds
-    maxTime = 2 * 60
+    maxTime = 8 * 60
     start = time.time()
     now = time.time()
            
@@ -234,7 +235,6 @@ def takeThreePictures(C, camera, signals, sgn):
         return
     elif signals['metal']:
         C.Move(0, 'S')
-        debug_print('Metal encountered. Returning to the center.')
         # Return to the center
         debug_print('Metal encountered and skipped second side picture. Returning to the center.')
         C.Move(0, 'M', -1 * sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
@@ -246,12 +246,12 @@ def takeThreePictures(C, camera, signals, sgn):
         C.Move(0, 'M', -1 * sgn * pathHalfLength, wait = True)
 
     resetSignals(signals)
+    debug_print('Take three pictures procedure finished for plant #' + str(signals['pltCnt']) + '.')
     signals['pltCnt'] += 1
     signals['imgCnt'] = 1
-    debug_print('Take three pictures procedure finished.')
 
 def resetSignals(signals):
-    targets = ['green', 'red', 'blue', 'stop', 'metal']
+    targets = ['green', 'red', 'blue', 'stop', 'metal', 'maxTime', 'finish']
     for t in targets:
         signals[t] = False
 
@@ -273,7 +273,8 @@ def plantIter(C, camera, direction, signals):
             C.Move(0, 'M', -1 * sgn * 5, wait = True)
             resetSignals(signals)
             return
-        if signals['stop']:
+        if signals['maxTime']:
+            signals['stop'] = True
             debug_print('Operation aborted due to stop signal during first red search.')
             return
     
@@ -283,14 +284,17 @@ def plantIter(C, camera, direction, signals):
         if signals['metal']:
             debug_print('Metal signal during green search. Returning to vertical home position.')
             C.Move(1, 'H', wait = True)
-            C.Move(0, 'M', sgn * 5, wait = True)
+            ret = safeMove(C, 0, 'M', sgn * 15, signals)
             resetSignals(signals)
+            if ret == False:
+                return
+
             continue
         if signals['stop']:
             debug_print('Operation aborted due to stop signal during green search.')
             return
 
-        C.Move(1, 'M', 4, wait = True)
+        C.Move(1, 'M', 15, wait = True)
         # Searching for red again, as the plant is perhaps not centered now
         centerPos = C.AskPosition(0)
         T_red = threading.Thread(target = findRedObject, args = (C, -1 * sgn, signals, 20))
@@ -299,31 +303,66 @@ def plantIter(C, camera, direction, signals):
         if signals['metal']:
             debug_print('Metal signal during second red search. Returning to latest best position.')
             C.Move(0, 'M', sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
-        if signals['stop']:
+        if signals['maxTime']:
             debug_print('Stop signal during second red search. Returning to latest best position.')
             C.Move(0, 'M', sgn * abs((C.AskPosition(0) - centerPos)), wait = True)
 
         resetSignals(signals)
         
         # Go down before taking the pictures
-        C.Move(1, 'M', -9, wait = True)            
+        C.Move(1, 'M', -16, wait = True)
         takeThreePictures(C, camera, signals, sgn)
         if signals['stop']:
             return
             
         debug_print('Moving up over the plants.')
-        C.Move(1, 'M', 70, wait = True)
+        safeMove(C, 1, 'M', 70, signals)
         if signals['stop']:
             return
             
         debug_print('Moving away from the plant and red wire.')
-        C.Move(0, 'M', sgn * 5, wait = True)
+        ret = safeMove(C, 0, 'M', sgn * 15, signals)
         resetSignals(signals)
+        if ret == False:
+            return
+
+def safeMove(C, motor, command, step, signals):
+    """ Executes a motor command while monitoring the metal sensors.
+    If metal is detected on the way, aborts the command and returns the motor back 5 cm's.
+    Returns whether the command was successfull or not."""
+
+    debug_print('Doing safe move for motor ' + str(motor) + ' (Command: ' + command + ', Step: ' + str(step)  + ').')
+    # Clearing potential old metal signals
+    signals['metal'] = False
+    time.sleep(1)
+
+    success = True
+    start = time.time()
+    now = time.time()
+
+    maxTime = C.Move(motor, command, step) + 5
+
+    while now - start < maxTime and not signals['metal']:
+        time.sleep(.1)
+        now = time.time()
+
+    if signals['metal']:
+        debug_print('Metal detected during safe move.')
+        C.Move(motor, 'S')
+        time.sleep(1)
+        success = False
+
+        sgn = step / abs(step)
+        C.Move(motor, 'M', -1 * sgn * 5, wait = True)
+        signals['metal'] = False
+
+    debug_print('Safe move done.')
+    return success
 
 def metalCheck(C, signals):
     """Checking the metal sensor pin """
     
-    while not signals['stop']:
+    while not signals['finish']:
         isMetal = C.ReadValues()
         if isMetal:
             signals['metal'] = True
@@ -377,12 +416,17 @@ def stopRoutine(C, signals):
     debug_print('Stop routine called.')
     for i in range(4):
         debug_print('Returning motor ' + str(i) + ' to home position.')
-        C.Move(i, 'H', wait = True)
-    
+        homePos = C.AskPosition(i)
+        safeMove(C, i, 'M', -1 * homePos, signals)
+        homePos = C.AskPosition(i)
         
     C.Lights(0)
-    signals['stop'] = True
     
+def uploadCloudFolder(folder):
+    debug_print('Uploading to cloud folder started.')
+    subprocess.call(['/home/pi/Dropbox-Uploader/dropbox_uploader.sh upload ' + folder + ' .'], shell = True)
+    debug_print('Uploading to cloud folder completed.')
+
 ############################ Main program ############################
 def run():
     signals = { 'green'  : False,
@@ -390,32 +434,40 @@ def run():
                 'blue'   : False,
                 'stop'   : False,
                 'metal'  : False,
-                'path'   : '../../Filakov/',
+                'maxTime': False,
+                'finish' : False,
+                'path'   : '/home/pi/Filakov/',
                 'pltCnt': 1,
                 'imgCnt' : 1 }
     
     start = time.time()
     
-    C = Controls("/dev/ttyACM0")
-    if not C.started:
-        debug_print("Controls of the motors are not started. Aborting program...")
-        return
-    
-    cam = cv2.VideoCapture(0)
-    time.sleep(1)
-    if not cam.isOpened():
-        debug_print("Camera is not opened. Aborting program...")
-        return
-    
     # Make directory for the pictures
-    directory = datetime.datetime.today().strftime('%Y-%m-%d %H-%M-%S')
-    signals['path'] += directory + '/' 
+    directory = datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S')
+    signals['path'] += directory + '/'
     try:
         os.makedirs(signals['path'])
     except Exception as e:
         debug_print(str(e))
         debug_print('Folder for pictures was not created. Aborting program...')
         return
+
+    global output_file
+    output_file = open(signals['path'] + 'log.txt', 'w', encoding='utf-8')
+
+    C = Controls("/dev/ttyACM0", output_file)
+    if not C.started:
+        debug_print("Controls of the motors are not started. Aborting program...")
+        output_file.close()
+        return
+    
+    cam = cv2.VideoCapture(0)
+    time.sleep(1)
+    if not cam.isOpened():
+        debug_print("Camera is not opened. Aborting program...")
+        output_file.close()
+        return
+
     
     # Run the process
     T_metal = threading.Thread(target = metalCheck, args = (C, signals, ))
@@ -428,19 +480,23 @@ def run():
     
     C.Lights(1)
     # Camera calibration
+#    C.Move(2, 'M', 180, wait = True)
+#    calibrateCamera(C, signals)
+#    if signals['stop']:
+#        stopRoutine(C, signals)
+#        return
+
     C.Move(2, 'M', 180, wait = True)
-    calibrateCamera(C, signals)
-    if signals['stop']:
-        stopRoutine(C, signals)
-        return
-    
-    C.Move(2, 'M', 105, wait = True)
-    debug_print('Camera calibrated successfully.')
+#    debug_print('Camera calibrated successfully.')
 
     # First iteration of plant imaging
     plantIter(C, cam, '-', signals)
     if signals['stop']:
         stopRoutine(C, signals)
+        signals['finish'] = True
+        T_cam.join()
+        T_metal.join()
+        output_file.close()
         return
 
     # Second iteration of plant imaging
@@ -449,14 +505,18 @@ def run():
     plantIter(C, cam, '+', signals)
     if signals['stop']:
         stopRoutine(C, signals)
+        signals['finish'] = True
+        T_cam.join()
+        T_metal.join()
+        output_file.close()
         return
 
     # Finishing routine
     debug_print('Vertical motor returning to home position.')
     C.Move(1, 'H', wait = True)
-    print('Job done:', (time.time() - start), 'secs', flush = True)
+    debug_print('Job done: ' + str(time.time() - start) + ' secs')
 
-    signals['stop'] = True
+    signals['finish'] = True
     T_cam.join()
     T_metal.join()
     C.Lights(0)
@@ -464,50 +524,63 @@ def run():
     C.Move(3, 'M', -250, wait = True)
     C.Close()
     
+    uploadCloudFolder(signals['path'])
+    output_file.close()
+
 ############################ End #####################################
 
 ############################ Temp program ############################
 def temp_run():
     temp_signals = { 'green'  : False,
-                     'red'    : False,
-                     'blue'   : False,
-                     'stop'   : False,
-                     'metal'  : False,
-                     'path'   : '../Images/',
-                     'imgCnt' : 0 }
+                    'red'    : False,
+                    'blue'   : False,
+                    'stop'   : False,
+                    'metal'  : False,
+                    'maxTime': False,
+                    'finish' : False,
+                    'path'   : '/home/pi/Filakov/',
+                    'pltCnt': 1,
+                    'imgCnt' : 1 }
 
     C = Controls("/dev/ttyACM0")
     if not C.started:
         debug_print("Controls of the motors are not started. Aborting program...")
         return
-
-    C.Lights(0)
-    time.sleep(3)
     
+    time.sleep(3)
     cam = cv2.VideoCapture(0)
     time.sleep(1)
     if not cam.isOpened():
         debug_print("Camera is not opened. Aborting program...")
         return
-           
+    
+    T_metal = threading.Thread(target = metalCheck, args = (C, temp_signals, ))
     T_cam = threading.Thread(target = cameraLoop, args = (cam, temp_signals, ))
+    T_metal.start()
     T_cam.start()
 
 #    calibrateCamera(C, temp_signals)
 #    if temp_signals['stop']:
 #        return
-#    
-#    C.Move(2, 'M', 105, wait = True)
+#
+#    C.Lights(1)
+
+    safeMove(C, 2, 'M', -90, temp_signals)
+
+    while True:
+        time.sleep(.5)
+        if temp_signals['stop']:
+            temp_signals['finish'] = True
+            break
 
     T_cam.join()
-    C.Lights(0)
+    T_metal.join()
+#    C.Lights(0)
     C.Close()
-    
-    #print('Camera is being released')
-    #cam.release()
     
 ############################ End #####################################
 
 if __name__ == "__main__":
-    #run()
-    temp_run()
+    run()
+#    temp_run()
+    

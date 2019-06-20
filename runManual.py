@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
+
 from controls import Controls
-import time
 
 # Rucno pokretanje motora
-C = Controls("/dev/ttyACMO")
+C = Controls("/dev/ttyACM0")
 
 C.Move(0, 'M', 10)
 
