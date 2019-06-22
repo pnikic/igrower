@@ -42,7 +42,7 @@ def sunrise_job():
 
     print("It's sunrise. Work started...", datetime.datetime.now(), flush=True)
     runSystem.run()
-    print("Job ended...", datetime.datetime.now(), flush=True)
+    print("Job ended...\n", datetime.datetime.now(), flush=True)
 
 ################################ MAIN PROGRAM ################################
 if __name__ == "__main__":

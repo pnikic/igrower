@@ -8,6 +8,8 @@ import os
 import threading
 import time
 import subprocess
+from sendMail import send_mail
+import config
 
 DEBUG_OUTPUT = 1
 output_file = None
@@ -424,8 +426,16 @@ def stopRoutine(C, signals):
     
 def uploadCloudFolder(folder):
     debug_print('Uploading to cloud folder started.')
-    subprocess.call(['/home/pi/Dropbox-Uploader/dropbox_uploader.sh upload ' + folder + ' .'], shell = True)
+    subprocess.call(['/home/pi/Dropbox-Uploader/dropbox_uploader.sh -q upload ' + folder + ' .'], shell = True)
     debug_print('Uploading to cloud folder completed.')
+    
+def sendDoneMail(log):
+    sbj = "iGrower: Izvještaj"
+    txt = "(" + str(datetime.datetime.now())[:-7:] + ") Snimanje Filakov je završeno."
+
+    send_mail(config.mail['username'], config.mail['recipients'], sbj, txt, [log],
+              config.mail['server'], config.mail['port'],
+              config.mail['username'], config.mail['password'], True)
 
 ############################ Main program ############################
 def run():
@@ -526,6 +536,7 @@ def run():
     
     uploadCloudFolder(signals['path'])
     output_file.close()
+    sendDoneMail(signals['path'] + 'log.txt')
 
 ############################ End #####################################
 
